@@ -1,10 +1,5 @@
 # Step by step tutorial for adding a new relational connector
 
-**Pre-requisite**: The dbType for which you are planning to add connector, should be included in the following DatabaseType enums
-[here](https://github.com/finos/legend-pure/blob/master/legend-pure-m2-store-relational/src/main/resources/platform/relational/relationalRuntime.pure)
-and [here](https://github.com/finos/legend-engine/blob/master/legend-engine-xt-relationalStore-protocol/src/main/java/org/finos/legend/engine/protocol/pure/v1/model/packageableElement/store/relational/connection/DatabaseType.java)
-and released. This is a temporary requirement till we replace these enums with a class instance.
-
 1. **Archetype Generation**: Use the maven archetype org.finos.legend.engine:legend-engine-xt-relationalStore-dbExtension-archetype in interactive mode to generate the base project for adding the connector.
 Let's say we are adding the connector for microsoft's SqlServer.
 
@@ -38,12 +33,12 @@ You will also need to add the following driver dependency to the pom.xml of sqls
 
 3. **Datasource and Authentication Specification**: See if one of the existing common DatasourceSpecification and AuthenticationStrategy subtypes work for connecting to databases within your use cases.
 Check the listing [here](https://github.com/finos/legend-engine/blob/master/legend-engine-xt-relationalStore-protocol/src/main/java/org/finos/legend/engine/protocol/pure/v1/RelationalProtocolExtension.java).
-If yes, then choose the appropriate ones. Else go to the section on [Adding a new Datasource or AuthenticationStrategy Specification](#adding-a-new-datasource-or-authenticationstrategy-specification).
+If yes, then choose the appropriate ones. Else go to the section on "Adding a new Datasource/AuthenticationStrategy Specification".
 
     For the sake of this tutorial lets continue with [StaticDatasourceSpecification](https://github.com/finos/legend-engine/blob/master/legend-engine-xt-relationalStore-protocol/src/main/java/org/finos/legend/engine/protocol/pure/v1/model/packageableElement/store/relational/connection/specification/StaticDatasourceSpecification.java) plus [UserNamePasswordAuthenticationStrategy](https://github.com/finos/legend-engine/blob/master/legend-engine-xt-relationalStore-protocol/src/main/java/org/finos/legend/engine/protocol/pure/v1/model/packageableElement/store/relational/connection/authentication/UserNamePasswordAuthenticationStrategy.java) to connect to our database.
 
 4. **Authentication Flow**: Now we will add an authentication flow for SqlServer using StaticDatasourceSpecification with UsernamePasswordAuthenticationStrategy.
-Let's create a class SqlServerStaticWithUserPasswordFlow in sqlserver-engine module.
+Let's create a class SqlServerStaticWithUserPasswordFlow in sqlserver-execution module.
 
     ~~~java
     // Copyright 2021 Goldman Sachs
@@ -105,7 +100,7 @@ Let's create a class SqlServerStaticWithUserPasswordFlow in sqlserver-engine mod
     
     Take a look at how we are constructing the credentials which can be passed to a SqlServer instance, based on the information from authStrategy specification (which uses vault references, as we don't want to specify credentials directly. Various vault impls can be plugged in at runtime, and this code reads from available impls).
     
-    You would also need to add following deps for the above logic:
+    You would also need to add the following dependecies for the above logic:
 
     ~~~xml
     <dependency>
@@ -140,13 +135,13 @@ Let's create a class SqlServerStaticWithUserPasswordFlow in sqlserver-engine mod
     </dependency>
     ~~~
     
-    SqlServerTestDatabaseAuthenticationFlowProviderConfig can be modified in future to have deployment level properties for auth.
+    SqlServerTestDatabaseAuthenticationFlowProviderConfiguration can be modified in future to have deployment level properties for auth.
     It can then be read from server config or a test config directly during initialization.
 
 6. **Test Database Instance**: There are 2 ways to declare a test db. If you have an already hosted instance, then you can use define a static test connection.
 If your database supports it, we can alternatively launch a test instance at runtime using docker (dynamic test connection).
 
-    Let's try to define a dynamic test connection for SqlServer. Define the below class in src/main/java section of sqlserver-execution-tests module.
+    Let's try to define a dynamic test connection for SqlServer. Define the class SqlServerUsingTestContainer in src/main/java section of sqlserver-execution-tests module.
 
     ~~~java
     // Copyright 2020 Goldman Sachs
@@ -246,8 +241,8 @@ If your database supports it, we can alternatively launch a test instance at run
 
     You can go through the above code to understand how we use the container provided by test-containers library to launch an instance of SqlServer, and
     then use a properties vault to store its user name / password, so that we can model the authentication strategy as part of connection specification.
-    
-    Running the setup() method in above class requires that you have a docker instance running on your machine. As expected, you will need to add following dependency for above class to compile
+
+    Running the setup() method in above class requires that you have a docker instance running on your machine. As expected, you will need to add following dependency for above class to compile.
 
     ~~~xml
     <dependency>
@@ -368,7 +363,7 @@ If your database supports it, we can alternatively launch a test instance at run
         dynaFnToSql('notEqual',               $allStates,            ^ToSql(format='%s != %s')),
         dynaFnToSql('or',                     $allStates,            ^ToSql(format='%s', transform={p:String[*]|$p->makeString(' or ')})),
         dynaFnToSql('sqlNull',                $allStates,            ^ToSql(format='null'))
-    ]
+    ];
     ~~~
 
     Now again, if you run tests from pure ide, more tests will go green.
@@ -436,7 +431,7 @@ If your database supports it, we can alternatively launch a test instance at run
                 + ')')->makeString(',') + ';';
     }
     ~~~
-    Now we can enable the DDL functionality by registering this fn in DbExtension like this
+    Add the following command in DbExtension to enable the DDL functionality by registering getDDLCommandsTranslatorForSqlServer() in the function createDbExtensionForSqlServer()
 
     ~~~java
     ddlCommandsTranslator = getDDLCommandsTranslatorForSqlServer()
@@ -471,17 +466,4 @@ We will now execute the generated sql against a real database instance, and make
     Now you can run the Test_Relational_DbSpecific_SqlServer_UsingPureClientTestSuite with docker running in background. If no tests fails, you can be sure that we have successfully, 1) established the connection 2) generated the sql 3) executed the sql, and asserted expected results.
     
     **Congratulations on completing the connector!**
-
-### Executing against database from Pure Ide
-
-In the tutorial, we test sql generation in pure ide, but for execution against db, we have to clean+install the sqlserver-pure module and then run the test from java.
-To speed up the development cycle, you can alternatively launch a test instance of engine server from java and link it with Pure Ide.
-Then, when you run the tests from Pure Ide, they will run both generation and execution against database. Here are the steps to do that:
-
-* Run SqlServerRelationalTestServerInvoker from sqlserver-execution-tests module. Say it is running at 6060.
-* Add following vm options to PureIDELight: -Dlegend.test.server.host=127.0.0.1 -Dlegend.test.server.port=6060 -Dlegend.test.clientVersion=vX_X_X -Dlegend.test.serverVersion=v1
-* Run PureIDELight
-
-### Adding a new Datasource or AuthenticationStrategy Specification
-
-TODO
+    
