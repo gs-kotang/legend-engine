@@ -969,43 +969,27 @@ class SqlVisitor extends SqlBaseParserBaseVisitor<Node>
     public Node visitJoinRelation(SqlBaseParser.JoinRelationContext ctx)
     {
         Join join = new Join();
+
         join.left = (Relation) visit(ctx.left);
+        join.right = (Relation) visit(ctx.rightRelation);
+        join.type = getJoinType(ctx.joinType());
 
-        if (ctx.CROSS() != null)
+        if (ctx.joinCriteria().ON() != null)
         {
-            join.right = (Relation) visit(ctx.right);
-            join.type = JoinType.CROSS;
-            return join;
+            JoinOn joinOn = new JoinOn();
+            joinOn.expression = (Expression) visit(ctx.joinCriteria().booleanExpression());
+            join.criteria = joinOn;
         }
-
-        if (ctx.NATURAL() != null)
+        else if (ctx.joinCriteria().USING() != null)
         {
-            join.right = (Relation) visit(ctx.right);
-            join.criteria = new NaturalJoin();
+            JoinUsing joinUsing = new JoinUsing();
+            joinUsing.columns = identsToStrings(ctx.joinCriteria().ident());
+            join.criteria = joinUsing;
         }
         else
         {
-            join.right = (Relation) visit(ctx.rightRelation);
-            if (ctx.joinCriteria().ON() != null)
-            {
-                JoinOn joinOn = new JoinOn();
-                joinOn.expression = (Expression) visit(ctx.joinCriteria().booleanExpression());
-                join.criteria = joinOn;
-            }
-            else if (ctx.joinCriteria().USING() != null)
-            {
-                List<String> columns = identsToStrings(ctx.joinCriteria().ident());
-                JoinUsing joinUsing = new JoinUsing();
-                joinUsing.columns = columns;
-                join.criteria = joinUsing;
-            }
-            else
-            {
-                throw new IllegalArgumentException("Unsupported join criteria");
-            }
+            throw new IllegalArgumentException("Unsupported join criteria");
         }
-
-        join.type = getJoinType(ctx.joinType());
 
         return join;
     }
